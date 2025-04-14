@@ -16,3 +16,5 @@ Credit:
     Steven Tran             stran15@csub.edu
     Atharva (Phillip) Koli  akoli@csub.edu
 -------------------------------------------------------------------------------
+
+![lrecomm](IMG_0842.jpeg)
