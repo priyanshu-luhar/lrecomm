@@ -17,4 +17,4 @@ Credit:
     Atharva (Phillip) Koli  akoli@csub.edu
 -------------------------------------------------------------------------------
 
-![lrecomm](./IMG_0842.jpeg)
+![lrecomm](/lrecomm/blob/main/IMG_0842.jpeg)
