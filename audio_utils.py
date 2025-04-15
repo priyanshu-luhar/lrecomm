@@ -11,6 +11,7 @@ ffmpeg -f s16le -ar 8000 -ac 1 -i decoded.raw decoded.wav
 import os
 import subprocess
 import logging
+import time
 from LXMF import LXMessage
 
 # Output directory for audio files
@@ -64,50 +65,87 @@ def decode_codec2_to_wav(input_path, output_wav_path, bitrate=1200):
         logging.error(f"[DECODE] Failed to decode audio: {e}")
         return None
 
-def save_and_decode_audio(fields, output_dir=AUDIO_OUT_DIR):
+def save_and_decode_audio(fields, output_dir=AUDIO_OUT_DIR, output_path=None):
     """
     Extracts Codec2 or Opus payload from LXMF fields and decodes it to a WAV file.
+    Returns (wav_path, duration_secs) or (None, 0) if decoding failed.
     """
+    def get_audio_duration_seconds(path):
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    path
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True
+            )
+            return int(float(result.stdout.strip()))
+        except Exception as e:
+            logging.warning(f"[DURATION] Failed to get duration: {e}")
+            return 0
+
     try:
         if 7 not in fields:
             logging.warning("[AUDIO] No audio field (7) found in LXMF message.")
-            return None
+            return None, 0
 
         audio_field = fields[7]
         if not isinstance(audio_field, list) or len(audio_field) < 2:
             logging.warning("[AUDIO] Malformed audio field structure.")
-            return None
+            return None, 0
 
         mode_code = audio_field[0]
         audio_data = audio_field[1]
 
-        base_name = f"audio_{mode_code}"
-        output_wav_path = os.path.join(output_dir, f"{base_name}.wav")
+        base_name = f"audio_{mode_code}_{int(time.time())}"
+        if output_path:
+            output_wav_path = output_path
+            output_dir_final = os.path.dirname(output_path)
+        else:
+            output_dir_final = output_dir or AUDIO_OUT_DIR
+            output_wav_path = os.path.join(output_dir_final, f"{base_name}.wav")
+
+
 
         if mode_code == 16:
             # Opus decoding
-            opus_path = os.path.join(output_dir, f"{base_name}.opus")
+            opus_path = os.path.join(output_dir_final, f"{base_name}.opus")
             with open(opus_path, "wb") as f:
                 f.write(audio_data)
 
             subprocess.run([
                 "ffmpeg", "-y", "-i", opus_path, output_wav_path
             ], check=True)
-            logging.info(f"[DECODE] Decoded Opus audio to {output_wav_path}")
-            return output_wav_path
+            os.remove(opus_path)
 
         else:
             # Assume Codec2
-            codec2_path = os.path.join(output_dir, f"{base_name}.c2")
+            codec2_path = os.path.join(output_dir_final, f"{base_name}.c2")
             with open(codec2_path, "wb") as f:
                 f.write(audio_data)
 
-            return decode_codec2_to_wav(codec2_path, output_wav_path,
-                                        bitrate={4: 1200, 9: 3200}.get(mode_code, 1200))
+            result = decode_codec2_to_wav(codec2_path, output_wav_path,
+                                          bitrate={4: 1200, 9: 3200}.get(mode_code, 1200))
+            # After decoding completes:
+            os.chmod(output_wav_path, 0o660)
+
+            os.remove(codec2_path)
+            if not result:
+                return None, 0
+
+        duration = get_audio_duration_seconds(output_wav_path)
+        logging.info(f"[DECODE] Decoded to {output_wav_path}, duration={duration}s")
+        return output_wav_path, duration
 
     except Exception as e:
         logging.error(f"[AUDIO] Failed to decode audio field: {e}")
-        return None
+        return None, 0
+
 
 
 def convert_audio_to_bytes(input_wav, codec="codec2", bitrate=1200):
