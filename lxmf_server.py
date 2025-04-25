@@ -8,11 +8,16 @@ import sys
 import time
 import json
 import threading
+from threading import Thread
 import logging
 import RNS
 import LXMF
 import audio_utils as audio
 from LXMF import LXMessage as LXM
+from LXST.Primitives.Telephony import Telephone
+from LXST.Sinks import LineSink
+import wave
+from datetime import datetime
 
 # === CONFIG ===
 APP_NAME = "lxmf_server"
@@ -37,6 +42,19 @@ logging.basicConfig(
     ]
 )
 
+def rns_log_callback(message, level=RNS.LOG_INFO):
+    if level >= RNS.LOG_CRITICAL:
+        logging.critical(message)
+    elif level >= RNS.LOG_ERROR:
+        logging.error(message)
+    elif level >= RNS.LOG_WARNING:
+        logging.warning(message)
+    elif level >= RNS.LOG_NOTICE:
+        logging.info(message)
+    else:
+        logging.debug(message)
+
+
 # === Identity ===
 if os.path.exists(os.path.join(STORAGE_DIR, "identity")):
     identity = RNS.Identity.from_file(os.path.join(STORAGE_DIR, "identity"))
@@ -47,9 +65,14 @@ else:
     logging.info("[ID] Created new identity and saved to disk.")
 
 # === Reticulum & LXMF ===
-RNS.Reticulum()
+RNS.Reticulum(loglevel=RNS.LOG_INFO, logdest=rns_log_callback)
+# RNS.Reticulum(logdest="rns.log", loglevel=None, logdest=None,loglevel=RNS.LOG_WARNING)
 router = LXMF.LXMRouter(storagepath=STORAGE_DIR, enforce_stamps=True)
 destination = router.register_delivery_identity(identity, display_name=DISPLAY_NAME, stamp_cost=STAMP_COST)
+destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
+RNS.log
+# Optional: silence internal error/warning logs too
+# RNS.log_to_console = False
 
 
 
@@ -96,7 +119,7 @@ def create_asterisk_metadata_txt(path, mailbox, message, duration):
     serial = "00000001"  # You could increment this if needed
     msg_id = f"{now}-{serial}"
 
-    txt = f""" ;
+    txt = f""";
 ; Message Information file
 ;
 [message]
@@ -122,37 +145,90 @@ duration={duration}
 
 DISCOVERED_PATH = os.path.join(STORAGE_DIR, "discovered_peers.json")
 
-class BuddyAnnounceHandler:
-    def __init__(self, aspect_filter="lxmf.delivery"):
+# class BuddyAnnounceHandler:
+#     def __init__(self, aspect_filter="lxmf.delivery"):
+#         self.aspect_filter = aspect_filter
+
+#     def received_announce(self, destination_hash, announced_identity, app_data):
+#         hex_hash = destination_hash.hex().lower()
+
+#         if hex_hash in user_hashes.values():
+#             return  # Already known user, skip
+
+#         name = announced_identity.display_name if announced_identity else "Unknown"
+
+#         # Load discovered_peers.json
+#         if os.path.exists(DISCOVERED_PATH):
+#             with open(DISCOVERED_PATH, "r") as f:
+#                 discovered = json.load(f)
+#         else:
+#             discovered = {}
+
+#         if hex_hash not in discovered:
+#             logging.info(f"[DISCOVERY] New LXMF peer: {name} ({hex_hash})")
+
+#         discovered[hex_hash] = {
+#             "name": name,
+#             "pubkey": RNS.hexrep(announced_identity.hash),
+#             "last_seen": int(time.time())
+#         }
+
+#         with open(DISCOVERED_PATH, "w") as f:
+#             json.dump(discovered, f, indent=2)
+
+class LXMFAnnounceHandler:
+    def __init__(self, aspect_filter=None):
         self.aspect_filter = aspect_filter
 
     def received_announce(self, destination_hash, announced_identity, app_data):
-        hex_hash = destination_hash.hex().lower()
+        hexhash = RNS.prettyhexrep(destination_hash)
+        logging.info(f"[ANNOUNCE] Received announce from: <{hexhash}>")
 
-        if hex_hash in user_hashes.values():
-            return  # Already known user, skip
+        if app_data:
+            try:
+                decoded = app_data.decode("utf-8")
+                logging.info(f"[ANNOUNCE] App data in announce: {decoded}")
+            except UnicodeDecodeError:
+                hex_data = app_data.hex()
+                logging.debug(f"[ANNOUNCE] App data (raw hex): {hex_data}")
 
-        name = announced_identity.display_name if announced_identity else "Unknown"
 
-        # Load discovered_peers.json
-        if os.path.exists(DISCOVERED_PATH):
-            with open(DISCOVERED_PATH, "r") as f:
-                discovered = json.load(f)
-        else:
-            discovered = {}
+VOICEMAIL_BOX = "7002"
+VM_INBOX = f"/var/spool/asterisk/voicemail/default/{VOICEMAIL_BOX}/INBOX"
 
-        if hex_hash not in discovered:
-            logging.info(f"[DISCOVERY] New LXMF peer: {name} ({hex_hash})")
+def create_asterisk_metadata_txt(txt_path, duration=5):
+    timestamp = int(time.time())
+    dt = datetime.now()
+    with open(txt_path, "w") as f:
+        f.write(f"""{timestamp}|{dt.hour}:{dt.minute}|{dt.strftime('%A')}|{dt.strftime('%B')} {dt.day} {dt.year}||callerid=""|duration={duration}\n""")
 
-        discovered[hex_hash] = {
-            "name": name,
-            "pubkey": RNS.hexrep(announced_identity.hash),
-            "last_seen": int(time.time())
-        }
+def handle_incoming_voice_calls(identity):
+    telephone = Telephone(identity)
+    logging.info("[Voice] Voice listener thread started")
 
-        with open(DISCOVERED_PATH, "w") as f:
-            json.dump(discovered, f, indent=2)
+    while True:
+        try:
+            if telephone.is_ringing:
+                logging.info("[Voice] Incoming call detected. Answering...")
+                base_name = f"msg{int(time.time()) % 10000:04d}"
+                wav_path = os.path.join(VM_INBOX, f"{base_name}.wav")
+                txt_path = os.path.join(VM_INBOX, f"{base_name}.txt")
 
+                telephone.set_speaker(LineSink(wav_path))
+                telephone.answer()
+
+                # Wait until call ends
+                while telephone.is_in_call:
+                    time.sleep(1)
+
+                logging.info(f"[Voice] Call ended. Saved to {wav_path}")
+                create_asterisk_metadata_txt(txt_path)
+                os.chmod(wav_path, 0o660)
+                os.chmod(txt_path, 0o660)
+
+        except Exception as e:
+            logging.error(f"[Voice] Error in call handling: {e}")
+        time.sleep(1)
 
 
 # === Handle incoming messages ===
@@ -164,7 +240,6 @@ def handle_delivery(message: LXM):
         if not isinstance(message, LXM):
             logging.warning("[DELIVERY] Received non-LXMF message. Ignoring.")
             return
-
 
         if not user_hashes:
             logging.warning("[INCOMING] No user_hashes.json found.")
@@ -219,11 +294,11 @@ def handle_delivery(message: LXM):
     except Exception as e:
         logging.error(f"[DELIVERY] Error handling message: {e}")
 
-buddy_handler = BuddyAnnounceHandler(aspect_filter=None)
-RNS.Transport.register_announce_handler(buddy_handler)
-logging.info("[DISCOVERY] Buddy announce handler registered.")
-router.register_delivery_callback(handle_delivery)
-logging.debug("[DELIVERY] Delivery handler registered.")
+
+# RNS.Transport.register_announce_handler(LXMFAnnounceHandler())
+# logging.info("[ANNOUNCE] LXMF announce handler registered.")
+# router.register_delivery_callback(handle_delivery)
+# logging.debug("[DELIVERY] Delivery handler registered.")
 
 # === Outgoing poller ===
 outgoing_status = {"pending": 0, "sent": 0, "errors": 0}
@@ -389,5 +464,6 @@ def menu_loop():
 if __name__ == "__main__":
     logging.info("[BOOT] LXMF Server starting...")
     threading.Thread(target=poll_outgoing, daemon=True).start()
+    # threading.Thread(target=handle_incoming_voice_calls, args=(identity,), daemon=True).start()
     logging.info("[POLL] Outgoing poller started.")
     menu_loop()
