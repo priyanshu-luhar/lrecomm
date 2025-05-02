@@ -14,7 +14,7 @@ Credit:
     Michael Kausch          mkausch@csub.edu
     Fenoon Alrowhani        falrowhani@csub.edu
     Steven Tran             stran15@csub.edu
-    Atharva (Phillip) Koli  akoli@csub.edu
+    Phillip Lakes           akoli@csub.edu
 -------------------------------------------------------------------------------
 
 ![IMG_0842](https://github.com/user-attachments/assets/1d27cec0-4cbd-4667-b3e8-76529fa467c7)
