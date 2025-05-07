@@ -3,6 +3,7 @@ import numpy as np
 import threading
 import time
 from LXST.Sinks import Sink
+import RNS
 
 class FileSink(Sink):
     def __init__(self, output_path, samplerate=24000, channels=1):
@@ -13,6 +14,7 @@ class FileSink(Sink):
         self.frame_buffer = []
         self.buffer_lock = threading.Lock()
         self.should_run = False
+        RNS.log(f"FileSink initialized with output path: {self.output_path}", RNS.LOG_DEBUG)
 
     def can_receive(self, from_source=None):
         return True
@@ -22,22 +24,27 @@ class FileSink(Sink):
             self.frame_buffer.append(frame)
 
     def start(self):
+        RNS.log("FileSink worker starting", RNS.LOG_DEBUG)
         self.should_run = True
         threading.Thread(target=self.__sink_worker, daemon=True).start()
 
     def stop(self):
+        RNS.log("FileSink worker stopping", RNS.LOG_DEBUG)
         self.should_run = False
         time.sleep(0.5)  # Give time for thread to finish
 
     def __sink_worker(self):
+        RNS.log("FileSink worker started", RNS.LOG_DEBUG)
         while self.should_run or self.frame_buffer:
             with self.buffer_lock:
                 if self.frame_buffer:
                     frame = self.frame_buffer.pop(0)
                     self.frames.append(frame)
             time.sleep(0.01)
+        RNS.log("FileSink worker stopped", RNS.LOG_DEBUG)
 
     def write_wav(self):
+        RNS.log(f"Writing WAV file to {self.output_path}", RNS.LOG_DEBUG)
         with wave.open(self.output_path, 'wb') as wf:
             wf.setnchannels(self.channels)
             wf.setsampwidth(2)  # 16-bit audio
@@ -47,3 +54,4 @@ class FileSink(Sink):
                 if frame.dtype != np.int16:
                     frame = (frame * 32767).astype(np.int16)
                 wf.writeframes(frame.tobytes())
+        RNS.log(f"WAV file written to {self.output_path}", RNS.LOG_DEBUG)

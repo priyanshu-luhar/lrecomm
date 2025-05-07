@@ -38,7 +38,7 @@ class Telephone(SignallingReceiver):
     ALLOW_ALL             = 0xFF
     ALLOW_NONE            = 0xFE
 
-    def __init__(self, identity, ring_time=RING_TIME, wait_time=WAIT_TIME, auto_answer=None, allowed=ALLOW_ALL, receive_sink=None):
+    def __init__(self, identity, ring_time=RING_TIME, wait_time=WAIT_TIME, auto_answer=None, allowed=ALLOW_ALL, receive_sink: FileSink=None):
         super().__init__()
         self.identity = identity
         self.destination = RNS.Destination(self.identity, RNS.Destination.IN, RNS.Destination.SINGLE, APP_NAME, PRIMITIVE_NAME)
@@ -79,7 +79,7 @@ class Telephone(SignallingReceiver):
         self.speaker_device = None
         self.microphone_device = None
         self.ringer_device = None
-        self.custom_receive_sink = receive_sink
+        self.custom_receive_sink : FileSink = receive_sink
 
         threading.Thread(target=self.__jobs, daemon=True).start()
         RNS.log(f"{self} listening on {RNS.prettyhexrep(self.destination.hash)}", RNS.LOG_DEBUG)
@@ -326,8 +326,15 @@ class Telephone(SignallingReceiver):
         self.select_call_frame_time()
         self.select_call_codecs()
         # if self.audio_output == None:     self.audio_output = LineSink(preferred_device=self.speaker_device)
+        # if self.audio_output == None:
+        #     self.audio_output = self.custom_receive_sink if self.custom_receive_sink else LineSink(preferred_device=self.speaker_device)
         if self.audio_output == None:
-            self.audio_output = self.custom_receive_sink if self.custom_receive_sink else LineSink(preferred_device=self.speaker_device)
+            if self.custom_receive_sink:
+                RNS.log(f"Using custom receive sink", RNS.LOG_DEBUG)
+                self.audio_output = self.custom_receive_sink
+            else:
+                RNS.log(f"Using default receive sink", RNS.LOG_DEBUG)
+                self.audio_output = LineSink(preferred_device=self.speaker_device)
         if self.receive_mixer == None:    self.receive_mixer = Mixer(target_frame_ms=self.target_frame_time_ms)
         if self.dial_tone == None:        self.dial_tone = ToneSource(frequency=self.dial_tone_frequency, gain=0.0, ease_time_ms=self.dial_tone_ease_ms, target_frame_ms=self.target_frame_time_ms, codec=Null(), sink=self.receive_mixer)
         if self.receive_pipeline == None: self.receive_pipeline = Pipeline(source=self.receive_mixer, codec=Null(), sink=self.audio_output)
@@ -418,6 +425,8 @@ class Telephone(SignallingReceiver):
             if self.transmit_mixer:    self.transmit_mixer.start()
             if self.audio_input:       self.audio_input.start()
             if self.transmit_pipeline: self.transmit_pipeline.start()
+            if self.receive_pipeline:  self.receive_pipeline.start()
+            if self.custom_receive_sink: self.custom_receive_sink.start()
             if not self.audio_input:   RNS.log("No audio input was ready at call establishment", RNS.LOG_ERROR)
             RNS.log(f"Audio pipelines started", RNS.LOG_DEBUG)
 
@@ -428,6 +437,9 @@ class Telephone(SignallingReceiver):
             if self.audio_input:       self.audio_input.stop()
             if self.receive_pipeline:  self.receive_pipeline.stop()
             if self.transmit_pipeline: self.transmit_pipeline.stop()
+            if self.custom_receive_sink: 
+                self.custom_receive_sink.stop()
+                self.custom_receive_sink.write_wav()
             RNS.log(f"Audio pipelines stopped", RNS.LOG_DEBUG)
 
     def call(self, identity):
