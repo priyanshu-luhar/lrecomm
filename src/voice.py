@@ -140,21 +140,25 @@ class ReticulumTelephone():
         self.telephone = None
 
     def hangup(self): 
+        global refresh_needed
         self.telephone.hangup()
         if refresh_needed: refresh_needed.set()
 
 
     def answer(self): 
+        global refresh_needed
         logging.info(f"Answering call from {RNS.prettyhexrep(self.caller.hash)}")
         self.telephone.answer(self.caller)
         if refresh_needed: refresh_needed.set()
 
-    def set_busy(self, busy): 
+    def set_busy(self, busy):
+        global refresh_needed 
         self.telephone.set_busy(busy)
         if refresh_needed: refresh_needed.set()
 
 
     def dial(self, identity_hash):
+        global refresh_needed
         self.last_dialled_identity_hash = identity_hash
         destination_hash = RNS.Destination.hash_from_name_and_identity("lxst.telephony", identity_hash)
         
@@ -178,6 +182,7 @@ class ReticulumTelephone():
         if self.last_dialled_identity_hash: self.dial(self.last_dialled_identity_hash)
 
     def call(self, remote_identity):
+        global refresh_needed
         RNS.log(f"Calling {RNS.prettyhexrep(remote_identity.hash)}...", RNS.LOG_DEBUG)
         logging.info(f"Calling {RNS.prettyhexrep(remote_identity.hash)}...")
         self.state = self.STATE_CONNECTING
@@ -205,6 +210,7 @@ class ReticulumTelephone():
             self.owner.incoming_call(remote_identity)
 
     def call_ended(self, remote_identity):
+        global refresh_needed
         if self.is_in_call or self.is_ringing or self.call_is_connecting:
             if self.is_in_call:
                 RNS.log(f"Call with {RNS.prettyhexrep(self.caller.hash)} ended\n", RNS.LOG_DEBUG)
@@ -217,9 +223,11 @@ class ReticulumTelephone():
                 logging.info(f"Call to {RNS.prettyhexrep(self.caller.hash)} could not be connected")
             self.direction = None
             self.state = self.STATE_AVAILABLE
+            RNS.log(f"State: is_in_call: {self.is_in_call}, is_ringing: {self.is_ringing}, call_is_connecting: {self.call_is_connecting}, is_available: {self.is_available}", RNS.LOG_DEBUG)
             if refresh_needed: refresh_needed.set()
 
     def call_established(self, remote_identity):
+        global refresh_needed
         if self.call_is_connecting or self.is_ringing:
             self.state = self.STATE_IN_CALL
             if refresh_needed: refresh_needed.set()

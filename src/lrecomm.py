@@ -66,48 +66,49 @@ def get_user_input(stdscr, prompt):
     return input_str
 
 
-
 def handle_menu(stdscr, title, descriptions):
-    global refresh_needed
+    global telephone
     options = list(descriptions.keys())
     current_idx = 0
-    stdscr.timeout(100)
 
-    stop_event = threading.Event()
+    stdscr.nodelay(True)  # Non-blocking mode
+    stdscr.clear()
 
-    def draw_loop():
-        while not stop_event.is_set():
-            if refresh_needed.is_set():
-                draw_box(stdscr, title, options, descriptions, current_idx)
-                refresh_needed.clear()
-            time.sleep(0.1)
-
-    # Start background draw thread
-    t = threading.Thread(target=draw_loop)
-    t.start()
-
+    base_title = title  # Keep the original title static
+    dynamic_title = f"{base_title} [{telephone.status_text}]"
+    draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
     try:
         while True:
-            draw_box(stdscr, title, options, descriptions, current_idx)
+            dynamic_title = f"{base_title} [{telephone.status_text}]"
+
+            if refresh_needed.is_set():
+                draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
+                refresh_needed.clear()
+
             key = stdscr.getch()
+            if key == -1:
+                time.sleep(0.1)
+                continue
 
             if key == curses.KEY_UP:
                 current_idx = (current_idx - 1) % len(options)
+                draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
             elif key == curses.KEY_DOWN:
                 current_idx = (current_idx + 1) % len(options)
+                draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
             elif key in [curses.KEY_ENTER, 10, 13]:
                 return options[current_idx]
-            elif key == 27:  # ESC key
+            elif key == 27:  # ESC
                 return "back"
     finally:
-        stop_event.set()
-        t.join()
+        stdscr.nodelay(False)
+
 
 def show_menu(stdscr):
-    global contacts, my_destination
+    global contacts, my_destination, router, reticulum, broadcast_destination, telephone
     curses.curs_set(0)
     stdscr.keypad(True)
-    threading.Thread(target=background_refresh, args=(stdscr,), daemon=True).start()
+    # threading.Thread(target=background_refresh, args=(stdscr,), daemon=True).start()
 
     main_menu = {
         "messages": "Messages",
@@ -123,7 +124,7 @@ def show_menu(stdscr):
     }
 
     while True:
-        title = f"LRECOMM [{telephone.status_text}]"
+        title = f"LRECOMM"
         selected = handle_menu(stdscr, title, main_menu)
 
         if selected == "q":
@@ -208,7 +209,8 @@ def show_menu(stdscr):
                     broadcast_msg(broadcast_destination, user_input)
         elif selected == "audio":
             audio_menu = {}
-            if telephone.is_in_call:
+            # if telephone.is_in_call:
+            if not telephone.is_available:
                 audio_menu["hangup"] = "Hang Up"
             else:
                 audio_menu["call"] = "Place an Audio Call"
@@ -262,11 +264,11 @@ def show_menu(stdscr):
             stdscr.refresh()
             time.sleep(2)
 
-def background_refresh(interval=0.5):
-    # pass
-    while True:
-        time.sleep(interval)
-        refresh_needed.set()
+# def background_refresh(interval=0.5):
+#     # pass
+#     while True:
+#         time.sleep(interval)
+#         refresh_needed.set()
 
 def run_menu():
     curses.wrapper(show_menu)
@@ -297,7 +299,8 @@ def signal_handler(signum, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-if __name__ == "__main__":
+def main():
+    global my_destination, router, reticulum, broadcast_destination, telephone
     my_destination, router, reticulum, broadcast_destination = rns_setup("../.reticulum")
     id = load_identity()
     speaker = LineSink()
@@ -308,4 +311,7 @@ if __name__ == "__main__":
 #    my_destination, router, reticulum, broadcast_destination = rns_setup()
     run_menu()
     shutdown()
+
+if __name__ == "__main__":
+    main()
 

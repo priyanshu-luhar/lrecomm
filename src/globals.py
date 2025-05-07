@@ -16,3 +16,4 @@ DISPLAY_NAME = "gonna"
 
 
 refresh_needed = threading.Event()
+my_destination, router, reticulum, broadcast_destination = None, None, None, None
