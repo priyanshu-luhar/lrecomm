@@ -1,3 +1,5 @@
+import threading
+
 contacts = []
 
 my_destination = None
@@ -13,4 +15,4 @@ STAMP_COST = 1
 DISPLAY_NAME = "gonna"
 
 
-refresh_needed = None
+refresh_needed = threading.Event()

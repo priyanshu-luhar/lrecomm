@@ -139,11 +139,20 @@ class ReticulumTelephone():
         self.telephone.teardown()
         self.telephone = None
 
-    def hangup(self): self.telephone.hangup()
+    def hangup(self): 
+        self.telephone.hangup()
+        if refresh_needed: refresh_needed.set()
+
+
     def answer(self): 
         logging.info(f"Answering call from {RNS.prettyhexrep(self.caller.hash)}")
         self.telephone.answer(self.caller)
-    def set_busy(self, busy): self.telephone.set_busy(busy)
+        if refresh_needed: refresh_needed.set()
+
+    def set_busy(self, busy): 
+        self.telephone.set_busy(busy)
+        if refresh_needed: refresh_needed.set()
+
 
     def dial(self, identity_hash):
         self.last_dialled_identity_hash = identity_hash
@@ -162,6 +171,8 @@ class ReticulumTelephone():
         else:
             logging.debug(f"Path to {RNS.prettyhexrep(destination_hash)} not found, requesting...")
             return "no_path"
+        if refresh_needed: refresh_needed.set()
+
 
     def redial(self, args=None):
         if self.last_dialled_identity_hash: self.dial(self.last_dialled_identity_hash)
@@ -173,8 +184,13 @@ class ReticulumTelephone():
         self.caller = remote_identity
         self.direction = "to"
         self.telephone.call(self.caller)
+        if refresh_needed: refresh_needed.set()
+
 
     def ringing(self, remote_identity):
+        global refresh_needed
+        if refresh_needed: refresh_needed.set()
+        RNS.log(f"refresh_needed set in ringing", RNS.LOG_DEBUG)
         logging.info(f"Incoming call from {RNS.prettyhexrep(remote_identity.hash)}")
         logging.info(f"State: is_in_call: {self.is_in_call}, is_ringing: {self.is_ringing}, call_is_connecting: {self.call_is_connecting}")
         if self.hw_state == self.HW_STATE_SLEEP: self.hw_state = self.HW_STATE_IDLE
@@ -183,7 +199,6 @@ class ReticulumTelephone():
         self.direction = "from" if self.direction == None else "to"
         RNS.log(f"Incoming call from {RNS.prettyhexrep(self.caller.hash)}", RNS.LOG_DEBUG)
         logging.info(f"Incoming call from {RNS.prettyhexrep(self.caller.hash)}")
-        if refresh_needed: refresh_needed.set()
         logging.info(f"Auto-answering call from {RNS.prettyhexrep(self.caller.hash)}")
         # self.answer()
         if self.owner:
@@ -210,6 +225,7 @@ class ReticulumTelephone():
             if refresh_needed: refresh_needed.set()
             RNS.log(f"Call established with {RNS.prettyhexrep(self.caller.hash)}", RNS.LOG_DEBUG)
             logging.info(f"Call established with {RNS.prettyhexrep(self.caller.hash)}")
+            if refresh_needed: refresh_needed.set()
 
     def __is_allowed(self, identity_hash):
         if self.owner and hasattr(self.owner, "config") and self.owner.config.get("voice_trusted_only", False):

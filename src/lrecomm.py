@@ -5,6 +5,7 @@ import LXMF
 import time
 import curses
 import threading
+import signal
 
 from database_utils import *
 from voicemail_utils import *
@@ -12,7 +13,6 @@ from reticulum_utils import *
 # from audio_call import *
 from message_utils import *
 from globals import *
-refresh_needed = threading.Event()
 
 from datetime import datetime as dt
 from LXMF import LXMessage as LXM
@@ -65,27 +65,43 @@ def get_user_input(stdscr, prompt):
     curses.noecho()
     return input_str
 
+
+
 def handle_menu(stdscr, title, descriptions):
+    global refresh_needed
     options = list(descriptions.keys())
     current_idx = 0
     stdscr.timeout(100)
 
-    while True:
-        draw_box(stdscr, title, options, descriptions, current_idx)
-        key = stdscr.getch()
+    stop_event = threading.Event()
 
-        if refresh_needed.is_set():
+    def draw_loop():
+        while not stop_event.is_set():
+            if refresh_needed.is_set():
+                draw_box(stdscr, title, options, descriptions, current_idx)
+                refresh_needed.clear()
+            time.sleep(0.1)
+
+    # Start background draw thread
+    t = threading.Thread(target=draw_loop)
+    t.start()
+
+    try:
+        while True:
             draw_box(stdscr, title, options, descriptions, current_idx)
-            refresh_needed.clear()
+            key = stdscr.getch()
 
-        if key == curses.KEY_UP:
-            current_idx = (current_idx - 1) % len(options)
-        elif key == curses.KEY_DOWN:
-            current_idx = (current_idx + 1) % len(options)
-        elif key in [curses.KEY_ENTER, 10, 13]:
-            return options[current_idx]
-        elif key == 27:  # ESC key
-            return "back"
+            if key == curses.KEY_UP:
+                current_idx = (current_idx - 1) % len(options)
+            elif key == curses.KEY_DOWN:
+                current_idx = (current_idx + 1) % len(options)
+            elif key in [curses.KEY_ENTER, 10, 13]:
+                return options[current_idx]
+            elif key == 27:  # ESC key
+                return "back"
+    finally:
+        stop_event.set()
+        t.join()
 
 def show_menu(stdscr):
     global contacts, my_destination
@@ -192,7 +208,10 @@ def show_menu(stdscr):
                     broadcast_msg(broadcast_destination, user_input)
         elif selected == "audio":
             audio_menu = {}
-            audio_menu["call"] = "Place an Audio Call"
+            if telephone.is_in_call:
+                audio_menu["hangup"] = "Hang Up"
+            else:
+                audio_menu["call"] = "Place an Audio Call"
             audio_menu["back"] = "Back to Main Menu"
 
             audio_selected = handle_menu(stdscr, "Audio Call", audio_menu)
@@ -229,6 +248,12 @@ def show_menu(stdscr):
                         stdscr.addstr(0, 0, f"Call failed: {e}", curses.A_BOLD)
                         stdscr.refresh()
                         time.sleep(2)
+            elif audio_selected == "hangup":
+                telephone.hangup()
+                stdscr.clear()
+                stdscr.addstr(0, 0, "Call ended", curses.A_BOLD)
+                stdscr.refresh()
+                time.sleep(2)
 
         else:
             stdscr.clear()
@@ -249,7 +274,9 @@ def run_menu():
 def shutdown():
     print("[CLEANUP] Hanging up and shutting down RNS...")
     try:
-        telephone.hangup()   # Ends any active call
+        if telephone.is_in_call:
+            RNS.log("Hanging up call...", RNS.LOG_DEBUG)
+            telephone.hangup()
         telephone.stop()     # Tears down threads, releases devices
     except Exception as e:
         print(f"[ERROR] During telephone shutdown: {e}")
@@ -257,6 +284,18 @@ def shutdown():
     RNS.Transport.detach_interfaces()
     RNS.Transport.identity = None
     RNS.reticulum = None
+
+
+# sigint handler
+def signal_handler(signum, frame):
+    print(f"[INFO] Received signal {signum}, shutting down...")
+    RNS.log(f"Received {signum} signal shutting down...", RNS.LOG_ERROR)
+    shutdown()
+    sys.exit(0)
+# Register the signal handler
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 if __name__ == "__main__":
     my_destination, router, reticulum, broadcast_destination = rns_setup("../.reticulum")
