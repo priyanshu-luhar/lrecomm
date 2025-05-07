@@ -15,9 +15,11 @@ def add_identity(rns_hash, lxmf_hash, name, username):
 
 def get_all_id():
     with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row  # Enable dict-like access
         c = conn.cursor()
-        c.execute("SELECT rnsHash, name FROM identity;")
-        return c.fetchall()
+        c.execute("SELECT rnsHash, lxmfHash, name, username FROM identity")
+        rows = c.fetchall()
+        return [dict(row) for row in rows]
 
 def log_msg_send(receiver_hash, content):
     with sqlite3.connect(DB_PATH) as conn:

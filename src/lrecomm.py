@@ -205,10 +205,10 @@ def show_menu(stdscr):
                 if selected_contact != "back":
                     recipient = contacts[int(selected_contact)]
 
-                    print(f"[DEBUG] Calling {recipient['name']} with identity_hash {recipient['identity_hash']}")
+                    print(f"[DEBUG] Calling {recipient['name']} with delivery_hash {recipient['delivery_hash']}")
 
                     try:
-                        peer_bytes = bytes.fromhex(recipient["identity_hash"])
+                        peer_bytes = bytes.fromhex(recipient["delivery_hash"])
                         peer_identity = RNS.Identity.recall(peer_bytes)
                         if not peer_identity:
                             RNS.Transport.request_path(peer_bytes)

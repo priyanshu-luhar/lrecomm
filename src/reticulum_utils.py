@@ -59,11 +59,11 @@ class LCOMMAnnounceHandler():
         global contacts
         hex_hash = destination_hash.hex().lower()
         exs = False
-        # try:
-        name = app_data.decode("utf-8")
-        # except Exception as e:
-        #     RNS.log(f"[WARN] Failed to decode announce name: {e}")
-        #     name = "Unknown"
+        try:
+            name = app_data.decode("utf-8")
+        except Exception as e:
+            RNS.log(f"[WARN] Failed to decode announce name: {e}")
+            name = "Unknown"
 
         try:
             identity_hash = announced_identity.hash.hex().lower()

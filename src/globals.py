@@ -10,7 +10,7 @@ ANNOUNCE_INTERVAL = 60
 IDENTITY_PATH = "../dbs/my_identity"
 STORAGE_DIR = "../dbs/lxmf"
 STAMP_COST = 1
-DISPLAY_NAME = "bimbo"
+DISPLAY_NAME = "gonna"
 
 
 refresh_needed = None
