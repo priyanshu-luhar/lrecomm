@@ -19,6 +19,8 @@ from LXMF import LXMessage as LXM
 from LXST.Sources import LineSource
 from LXST.Sinks import LineSink
 from voice import ReticulumTelephone
+from wav_sink import FileSink
+from audio_call import setup_audio_call
 
 RNS.logfile = "../logs/rns.log"
 RNS.loglevel = RNS.LOG_EXTREME
@@ -305,12 +307,20 @@ def main():
     global my_destination, router, reticulum, broadcast_destination, telephone
     my_destination, router, reticulum, broadcast_destination = rns_setup("../.reticulum")
     id = load_identity()
+    # telephone = setup_audio_call()
     speaker = LineSink()
     microphone = LineSource()
-    telephone = ReticulumTelephone(id, speaker=speaker, microphone=microphone, auto_answer=0.5)
+    output_directory = "../audio_out"
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    recording_path = os.path.join(output_directory, "voicemail.wav") 
+
+    file_sink = FileSink(recording_path)
+    telephone = ReticulumTelephone(id, microphone=microphone, auto_answer=0.5, receive_sink=file_sink)
+    # telephone = ReticulumTelephone(id, speaker=speaker, microphone=microphone, auto_answer=0.5, receive_sink=file_sink)
     telephone.announce()
 
-#    my_destination, router, reticulum, broadcast_destination = rns_setup()
+
     run_menu()
     shutdown()
 

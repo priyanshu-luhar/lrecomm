@@ -7,7 +7,7 @@ import logging
 from globals import refresh_needed
 
 from LXST._version import __version__
-from LXST.Primitives.Telephony import Telephone
+from Telephony import Telephone
 from RNS.vendor.configobj import ConfigObj
 
 # === Logging ===
@@ -38,7 +38,7 @@ class ReticulumTelephone():
     WAIT_TIME        = 60
     PATH_TIME        = 10
 
-    def __init__(self, identity, owner = None, service = False, speaker=None, microphone=None, ringer=None, auto_answer=False):
+    def __init__(self, identity, owner = None, service = False, speaker=None, microphone=None, ringer=None, auto_answer=False, receive_sink=None):
         self.identity          = identity
         self.service           = service
         self.owner             = owner
@@ -61,7 +61,7 @@ class ReticulumTelephone():
         self.names             = {}
         self.auto_answer       = auto_answer
         
-        self.telephone  = Telephone(self.identity, ring_time=self.RING_TIME, wait_time=self.WAIT_TIME, auto_answer=self.auto_answer)
+        self.telephone  = Telephone(self.identity, ring_time=self.RING_TIME, wait_time=self.WAIT_TIME, auto_answer=self.auto_answer, receive_sink=receive_sink)
         self.telephone.set_ringing_callback(self.ringing)
         self.telephone.set_established_callback(self.call_established)
         self.telephone.set_ended_callback(self.call_ended)
