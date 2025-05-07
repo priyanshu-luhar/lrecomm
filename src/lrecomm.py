@@ -226,8 +226,7 @@ def show_menu(stdscr):
                 if selected_contact != "back":
                     recipient = contacts[int(selected_contact)]
 
-                    print(f"[DEBUG] Calling {recipient['name']} with delivery_hash {recipient['delivery_hash']}")
-
+                    RNS.log(f"Calling {recipient['name']} with delivery_hash {recipient['delivery_hash']}", RNS.LOG_DEBUG)
                     try:
                         peer_bytes = bytes.fromhex(recipient["delivery_hash"])
                         peer_identity = RNS.Identity.recall(peer_bytes)
@@ -274,14 +273,17 @@ def run_menu():
     curses.wrapper(show_menu)
     
 def shutdown():
-    print("[CLEANUP] Hanging up and shutting down RNS...")
+    # print("[CLEANUP] Hanging up and shutting down RNS...")
+    RNS.log("Hanging up and shutting down RNS...", RNS.LOG_DEBUG)
+    global telephone
     try:
         if telephone.is_in_call:
             RNS.log("Hanging up call...", RNS.LOG_DEBUG)
             telephone.hangup()
         telephone.stop()     # Tears down threads, releases devices
     except Exception as e:
-        print(f"[ERROR] During telephone shutdown: {e}")
+        RNS.log(f"[ERROR] During telephone shutdown: {e}", RNS.LOG_ERROR)
+        # print(f"[ERROR] During telephone shutdown: {e}")
 
     RNS.Transport.detach_interfaces()
     RNS.Transport.identity = None
@@ -290,7 +292,7 @@ def shutdown():
 
 # sigint handler
 def signal_handler(signum, frame):
-    print(f"[INFO] Received signal {signum}, shutting down...")
+    # print(f"[INFO] Received signal {signum}, shutting down...")
     RNS.log(f"Received {signum} signal shutting down...", RNS.LOG_ERROR)
     shutdown()
     sys.exit(0)
