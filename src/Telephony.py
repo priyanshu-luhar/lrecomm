@@ -337,7 +337,11 @@ class Telephone(SignallingReceiver):
                 self.audio_output = LineSink(preferred_device=self.speaker_device)
         if self.receive_mixer == None:    self.receive_mixer = Mixer(target_frame_ms=self.target_frame_time_ms)
         if self.dial_tone == None:        self.dial_tone = ToneSource(frequency=self.dial_tone_frequency, gain=0.0, ease_time_ms=self.dial_tone_ease_ms, target_frame_ms=self.target_frame_time_ms, codec=Null(), sink=self.receive_mixer)
-        if self.receive_pipeline == None: self.receive_pipeline = Pipeline(source=self.receive_mixer, codec=Null(), sink=self.audio_output)
+        if self.receive_pipeline == None: 
+            c = Null()
+            if self.custom_receive_sink:
+                c = Codec2(mode=Codec2.CODEC2_700C)
+            self.receive_pipeline = Pipeline(source=self.receive_mixer, codec=c, sink=self.audio_output)
 
     def __activate_ring_tone(self):
         if self.ringtone_path != None and os.path.isfile(self.ringtone_path):
