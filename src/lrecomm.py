@@ -316,8 +316,8 @@ def main():
     recording_path = os.path.join(output_directory, "voicemail.wav") 
 
     file_sink = FileSink(recording_path, samplerate=8000)
-    telephone = ReticulumTelephone(id, microphone=microphone, auto_answer=0.5, receive_sink=file_sink)
-    # telephone = ReticulumTelephone(id, speaker=speaker, microphone=microphone, auto_answer=0.5, receive_sink=file_sink)
+    # telephone = ReticulumTelephone(id, microphone=microphone, auto_answer=0.5, receive_sink=file_sink)
+    telephone = ReticulumTelephone(id, speaker=speaker, microphone=microphone, auto_answer=0.5)
     telephone.announce()
 
 

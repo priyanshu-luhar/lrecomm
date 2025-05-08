@@ -290,10 +290,11 @@ class Telephone(SignallingReceiver):
 
     def select_call_codecs(self):
         # self.receive_codec = Null()
-        self.receive_codec = Codec2(mode=Codec2.CODEC2_700C)
+        # self.receive_codec = Codec2(mode=Codec2.CODEC2_700C)
+        self.receive_codec = Codec2(mode=Codec2.CODEC2_1200)
         
         # self.transmit_codec = Codec2(mode=Codec2.CODEC2_700C)
-        self.transmit_codec = Codec2(mode=Codec2.CODEC2_700C)
+        self.transmit_codec = Codec2(mode=Codec2.CODEC2_1200)
         # self.transmit_codec = Codec2(mode=Codec2.CODEC2_3200)
         # self.transmit_codec = Opus(profile=Opus.PROFILE_VOICE_LOW)
         # self.transmit_codec = Opus(profile=Opus.PROFILE_VOICE_MEDIUM)

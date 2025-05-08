@@ -46,7 +46,7 @@ class FileSink(Sink):
 
     def write_wav(self):
         RNS.log(f"Writing WAV file to {self.output_path}", RNS.LOG_DEBUG)
-        self.frames = [f for f in self.frames if np.max(np.abs(f)) > 0.01]
+        # self.frames = [f for f in self.frames if np.max(np.abs(f)) > 0.01]
         with wave.open(self.output_path, 'wb') as wf:
             wf.setnchannels(self.channels)
             wf.setsampwidth(2)  # 16-bit audio
