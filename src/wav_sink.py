@@ -6,7 +6,7 @@ from LXST.Sinks import Sink
 import RNS
 
 class FileSink(Sink):
-    def __init__(self, output_path, samplerate=24000, channels=1):
+    def __init__(self, output_path, samplerate=8000, channels=1):
         self.output_path = output_path
         self.samplerate = samplerate
         self.channels = channels
@@ -20,6 +20,7 @@ class FileSink(Sink):
         return True
 
     def handle_frame(self, frame, source=None):
+        RNS.log(f"FileSink got frame: type={type(frame)}, shape={getattr(frame, 'shape', None)}, dtype={getattr(frame, 'dtype', None)}", RNS.LOG_DEBUG)
         with self.buffer_lock:
             self.frame_buffer.append(frame)
 
@@ -50,8 +51,19 @@ class FileSink(Sink):
             wf.setsampwidth(2)  # 16-bit audio
             wf.setframerate(self.samplerate)
             for frame in self.frames:
-                # If the frame is float32, convert to int16 PCM
+                # Convert bytes to int16 if necessary
+                if isinstance(frame, bytes):
+                    frame = np.frombuffer(frame, dtype=np.int16)
+
+                # Convert float32 to int16 if necessary
                 if frame.dtype != np.int16:
+                    frame = np.clip(frame, -1.0, 1.0)
                     frame = (frame * 32767).astype(np.int16)
+
+                # Flatten multi-channel (e.g., shape (1915,1)) to 1D
+                frame = frame.flatten()
                 wf.writeframes(frame.tobytes())
+
         RNS.log(f"WAV file written to {self.output_path}", RNS.LOG_DEBUG)
+
+

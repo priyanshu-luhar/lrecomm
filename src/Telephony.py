@@ -307,7 +307,7 @@ class Telephone(SignallingReceiver):
         # self.transmit_codec = Raw()
 
     def select_call_frame_time(self):
-        self.target_frame_time_ms = 60
+        self.target_frame_time_ms = 80
         return self.target_frame_time_ms
 
     def __reset_dialling_pipelines(self):
@@ -335,24 +335,21 @@ class Telephone(SignallingReceiver):
             else:
                 RNS.log(f"Using default receive sink", RNS.LOG_DEBUG)
                 self.audio_output = LineSink(preferred_device=self.speaker_device)
-        if self.receive_mixer == None:    self.receive_mixer = Mixer(target_frame_ms=self.target_frame_time_ms)
+        if self.receive_mixer == None:    self.receive_mixer = Mixer(target_frame_ms=self.target_frame_time_ms, sample_rate=8000)
         if self.dial_tone == None:        self.dial_tone = ToneSource(frequency=self.dial_tone_frequency, gain=0.0, ease_time_ms=self.dial_tone_ease_ms, target_frame_ms=self.target_frame_time_ms, codec=Null(), sink=self.receive_mixer)
-        if self.receive_pipeline == None: 
-            c = Null()
-            if self.custom_receive_sink:
-                c = Codec2(mode=Codec2.CODEC2_700C)
-            self.receive_pipeline = Pipeline(source=self.receive_mixer, codec=c, sink=self.audio_output)
+        if self.receive_pipeline == None: self.receive_pipeline = Pipeline(source=self.receive_mixer, codec=Null(), sink=self.audio_output)
 
     def __activate_ring_tone(self):
         if self.ringtone_path != None and os.path.isfile(self.ringtone_path):
             if not self.ringer_pipeline:
                 if not self.ringer_output: self.ringer_output = LineSink(preferred_device=self.ringer_device)
-                self.ringer_source = OpusFileSource(self.ringtone_path, loop=True, target_frame_ms=60)
+                self.ringer_source = OpusFileSource(self.ringtone_path, loop=True, target_frame_ms=80)
                 self.ringer_pipeline = Pipeline(source=self.ringer_source, codec=Null(), sink=self.ringer_output)
 
             def job():
                 with self.ringer_lock:
                     while self.active_call and self.active_call.is_incoming and self.call_status == Signalling.STATUS_RINGING:
+
                         if not self.ringer_pipeline.running: self.ringer_pipeline.start()
                         time.sleep(0.1)
                     self.ringer_source.stop()
@@ -408,7 +405,7 @@ class Telephone(SignallingReceiver):
                     if self.active_call.is_incoming: self.signal(Signalling.STATUS_CONNECTING, self.active_call)
 
                     self.__prepare_dialling_pipelines()
-                    self.transmit_mixer = Mixer(target_frame_ms=self.target_frame_time_ms)
+                    self.transmit_mixer = Mixer(target_frame_ms=self.target_frame_time_ms, sample_rate=8000)
                     self.audio_input = LineSource(preferred_device=self.microphone_device, target_frame_ms=self.target_frame_time_ms, codec=Raw(), sink=self.transmit_mixer)
                     # self.audio_input = OpusFileSource("/home/markqvist/Information/Source/LXST/docs/425.opus", loop=True, target_frame_ms=self.target_frame_time_ms, codec=Raw(), sink=self.transmit_mixer, timed=True)
                     self.transmit_pipeline = Pipeline(source=self.transmit_mixer,
