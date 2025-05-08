@@ -247,13 +247,17 @@ def show_menu(stdscr):
             sip_menu["issip"] = "SIP gateway"
             sip_menu["notsip"] = "Normal Client"
             sip_menu["back"] = "Back to Main Menu"
+            sip_title = "This is a SIP"
+            sip_selected = handle_menu(stdscr, sip_title, sip_menu)
 
-            if IS_SIP:
-                sip_title = "This is a SIP"
-                sip_selected = handle_menu(stdscr, sip_title, sip_menu)
+            if sip_selected == "issip":
+                IS_SIP = True
+            elif sip_selected == "notsip":
+                IS_SIP = False
             else:
-                sip_title = "This is a CLIENT"
-                sip_selected = handle_menu(stdscr, sip_title, sip_menu)
+                pass
+            
+
         elif selected == "announce":
             announce_myself(my_destination, router)
             stdscr.clear()
