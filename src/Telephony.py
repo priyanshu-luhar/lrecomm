@@ -335,7 +335,7 @@ class Telephone(SignallingReceiver):
             else:
                 RNS.log(f"Using default receive sink", RNS.LOG_DEBUG)
                 self.audio_output = LineSink(preferred_device=self.speaker_device)
-        if self.receive_mixer == None:    self.receive_mixer = Mixer(target_frame_ms=self.target_frame_time_ms, sample_rate=8000)
+        if self.receive_mixer == None:    self.receive_mixer = Mixer(target_frame_ms=self.target_frame_time_ms, samplerate=8000)
         if self.dial_tone == None:        self.dial_tone = ToneSource(frequency=self.dial_tone_frequency, gain=0.0, ease_time_ms=self.dial_tone_ease_ms, target_frame_ms=self.target_frame_time_ms, codec=Null(), sink=self.receive_mixer)
         if self.receive_pipeline == None: self.receive_pipeline = Pipeline(source=self.receive_mixer, codec=Null(), sink=self.audio_output)
 
@@ -405,7 +405,7 @@ class Telephone(SignallingReceiver):
                     if self.active_call.is_incoming: self.signal(Signalling.STATUS_CONNECTING, self.active_call)
 
                     self.__prepare_dialling_pipelines()
-                    self.transmit_mixer = Mixer(target_frame_ms=self.target_frame_time_ms, sample_rate=8000)
+                    self.transmit_mixer = Mixer(target_frame_ms=self.target_frame_time_ms, samplerate=8000)
                     self.audio_input = LineSource(preferred_device=self.microphone_device, target_frame_ms=self.target_frame_time_ms, codec=Raw(), sink=self.transmit_mixer)
                     # self.audio_input = OpusFileSource("/home/markqvist/Information/Source/LXST/docs/425.opus", loop=True, target_frame_ms=self.target_frame_time_ms, codec=Raw(), sink=self.transmit_mixer, timed=True)
                     self.transmit_pipeline = Pipeline(source=self.transmit_mixer,
