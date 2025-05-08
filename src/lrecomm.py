@@ -4,11 +4,14 @@ import RNS
 import LXMF
 import time
 import curses
+import threading
+import subprocess
 
 from database_utils import *
 from voicemail_utils import *
 from reticulum_utils import *
 from message_utils import *
+from file_utils import *
 from globals import *
 
 from datetime import datetime as dt
@@ -69,7 +72,7 @@ def handle_menu(stdscr, title, descriptions):
             current_idx = (current_idx + 1) % len(options)
         elif key in [curses.KEY_ENTER, 10, 13]:
             return options[current_idx]
-        elif key == 27:  # ESC key
+        elif key == 27:
             return "back"
 
 def show_menu(stdscr):
@@ -132,7 +135,11 @@ def show_menu(stdscr):
                 send_vm_selected = handle_menu(stdscr, "Send Voicemail To", send_vm_menu)
                 if send_vm_selected in send_vm_menu and send_vm_selected != "back":
                     recipient = contacts[int(send_vm_selected)]
+                    
+                    # records a voice message in wav format and returns filepath
                     vm_filepath = record_voicemail(stdscr, recipient["hash"])
+                    #vm_filepath = "../str/voicemails/received/demo.wav"
+                    send_vm(vm_filepath, my_destination, recipient["hash"], router)
                     log_vm_send(recipient["hash"], vm_filepath)
                     
                     # todo, gonna add a function call to send audio file to the recipient hash
@@ -149,15 +156,69 @@ def show_menu(stdscr):
                 unread_vm_menu = {str(i): f"{c['wavpath']} " for i, c in enumerate(unread_vm)}
                 unread_vm_menu["back"] = "Back to Voicemail Menu"
             elif vm_selected == "recv":
-                recv_vm = get_unread_voicemails()
-                recv_vm_menu = {str(i): f"{c['wavpath']} " for i, c in enumerate(recv_vm)}
+                recv_vm = get_recv_voicemails()
+                recv_vm_menu = {str(i): f"{c[0]} " for i, c in enumerate(recv_vm)}
                 recv_vm_menu["back"] = "Back to Voicemail Menu"
+                recv_vm_selected = handle_menu(stdscr, "Received Voicemails", recv_vm_menu)
+                
+                if recv_vm_selected:
+                    play_demo_voicemail("../str/voicemails/received/demo.wav")
 
             elif vm_selected == "sent":
-                tump = 1
+                pass
             else:
-                tump = 1
+                pass
                 # Imma do nothin
+        elif selected == "files":
+            file_menu = {}
+            file_menu["send"] = "Send a File"
+            file_menu["recv"] = "Files Received"
+            file_menu["sent"] = "Files Sent"
+            file_menu["back"] = "Back to Main Menu"
+
+            file_selected = handle_menu(stdscr, "File", file_menu)
+
+            if file_selected == "send":
+                send_file_menu = {str(i): f"{c['name']} " for i, c in enumerate(contacts)}
+                send_file_menu["back"] = "Back to File Menu"
+
+                send_file_selected = handle_menu(stdscr, "Send File To", send_file_menu)
+                if send_file_selected in send_file_menu and send_file_selected != "back":
+                    recipient = contacts[int(send_file_selected)]
+                    
+                    file_filepath = get_manual_file_path(stdscr)
+                    
+                    send_file(file_filepath, my_destination, recipient["hash"], router)
+                    time.sleep(5)
+                    
+                    log_file_send(recipient["hash"], file_filepath)
+                    
+                    stdscr.clear()
+                    stdscr.addstr(0, 0, f"To: {recipient['name']} [{recipient['hash']}]", curses.A_BOLD)
+                    stdscr.addstr(1, 0, f"File Path: {file_filepath}")
+                    stdscr.addstr(2, 0, f"Logged into the database")
+                    stdscr.refresh()
+                    time.sleep(2)
+
+            elif file_selected == "recv":
+                pass
+            elif file_selected == "sent":
+                pass
+            else:
+                pass
+                # Imma do nothing
+        elif selected == "sip":
+            sip_menu = {}
+            sip_menu["issip"] = "SIP gateway"
+            sip_menu["notsip"] = "Normal Client"
+            sip_menu["back"] = "Back to Main Menu"
+
+            if IS_SIP:
+                sip_title = "This is a SIP"
+                sip_selected = handle_menu(stdscr, sip_title, sip_menu)
+            else:
+                sip_title = "This is a CLIENT"
+                sip_selected = handle_menu(stdscr, sip_title, sip_menu)
         elif selected == "announce":
             announce_myself(my_destination, router)
             stdscr.clear()
@@ -192,7 +253,9 @@ def shutdown():
 if __name__ == "__main__":
      my_destination, router, reticulum, broadcast_destination = rns_setup("../.reticulum")
 
-#    my_destination, router, reticulum, broadcast_destination = rns_setup()
-     run_menu()
-     shutdown()
-
+     try:
+        run_menu()
+     except Exception as e:
+        print(f'We encountered an error: {e}')
+     finally:
+        shutdown()

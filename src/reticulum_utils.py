@@ -2,10 +2,20 @@ import os
 import RNS
 import sys
 import LXMF
+import json
+
 from LXMF import LXMessage as LXM
 from database_utils import *
+from voicemail_utils import *
 from globals import *
 
+
+APP_NAME = "lrecomm"
+ANNOUNCE_INTERVAL = 60
+IDENTITY_PATH = "../dbs/my_identity"
+STORAGE_DIR = "../dbs/lxmf"
+STAMP_COST = 1
+DISPLAY_NAME = "luhar"
 
 def make_identity():
     my_id = RNS.Identity()
@@ -81,23 +91,6 @@ def resolve_destination(hex_hash):
     
     return RNS.Destination(recipient, RNS.Destination.OUT, RNS.Destination.SINGLE, "lxmf", "delivery")
 
-def send_voicemail(wav_path, my_destination, dest_hash):
-    global DISPLAY_NAME
-    try:
-        msg = audio.create_lxmf_audio_message(
-            destination=resolve_destination(dest_hash),
-            source=my_destination,
-            input_wav=wav_path,
-            title=f"Voicemail from {DISPLAY_NAME}",
-            codec="codec2",
-            bitrate = 1200
-        )
-        if msg:
-            router.handle_outbound(msg)
-        else:
-            raise Exception("Failed to build LXMF message")
-    except Exception as e:
-        pass
 
 def broadcast_msg(broadcast_destination, text):
     data = text.encode("utf-8")
@@ -121,23 +114,108 @@ def update_contacts():
                 "name": name
             })
 
+# Receiving
+######################################################################################
+
+def msg_callback(message):
+    global router, my_destination
+    hex_hash = message.source_hash.hex().lower()
+    text = str(message.content_as_string())
+
+    if message.title_as_string() == "Message":
+        log_msg_recv(hex_hash, text)
+    elif message.title_as_string() == "Voicemail":
+        decoded_path = save_and_decode_audio(message.fields)
+        log_vm_recv(hex_hash, decoded_path)
+    elif message.title_as_string() == "File":
+        try:
+            attachments = message.fields.get(LXMF.FIELD_FILE_ATTACHMENTS)
+            if attachments and isinstance(attachments, list):
+                save_dir = "../str/files/received"
+                os.makedirs(save_dir, exist_ok=True)
+
+                for attachment in attachments:
+                    if len(attachment) == 2:
+                        filename, file_bytes = attachment
+                        safe_name = f"{int(time.time())}_{filename}"
+                        file_path = os.path.join(save_dir, safe_name)
+
+                        with open(file_path, "wb") as f:
+                            f.write(file_bytes)
+
+                        log_file_recv(hex_hash, file_path)
+                        print(f"[✓] Received file saved: {file_path}")
+                    else:
+                        print("[!] Malformed attachment field")
+            else:
+                print("[!] No attachments found in fields")
+        except Exception as e:
+            print(f"[!] Error saving received file: {e}")
+    else:
+        pass
+
+# Sending
+######################################################################################
+
 def send_msg(router, destination, source, content):
     msg = LXM(
         destination,
         source,
         content,
-        "LXMF Message", # random title for now
+        "Message", # random title for now
         desired_method=LXMF.LXMessage.DIRECT,
         include_ticket=True
     )
 
     router.handle_outbound(msg)
 
-def msg_callback(message):
-    global router, my_destination
-    hex_hash = message.source_hash.hex().lower()
-    #print(hex_hash, str(message.content_as_string()))
-    text = str(message.content_as_string())
-    log_msg_recv(hex_hash, text)
-    #log_msg_recv(RNS.prettyhexrep(message.source_hash),str(message.content_as_string()))
+def send_vm(wavpath, my_destination, dest_hash, router):
+    global DISPLAY_NAME
+    try:
+        destination = resolve_destination(dest_hash)
+        
+        mode_code, audio_bytes = convert_audio_to_bytes(wavpath) 
 
+        msg = LXM(
+            destination,
+            my_destination,
+            f"Voicemail from {DISPLAY_NAME}", # content
+            "Voicemail", # title
+            desired_method=LXMF.LXMessage.DIRECT,
+            include_ticket=True
+        )
+        msg.fields[7] = [mode_code, audio_bytes]
+        if msg:
+            router.handle_outbound(msg)
+        else:
+            raise Exception("Failed to build LXMF message")
+    except Exception as e:
+        print(f"Error: {e}")
+        pass
+
+def send_file(filepath, my_destination, dest_hash, router):
+    global DISPLAY_NAME
+    try:
+        destination = resolve_destination(dest_hash)
+        filename = os.path.basename(filepath)
+        
+        with open(filepath, "rb") as f:
+            file_bytes = f.read()
+        
+        msg = LXM(
+            destination,
+            my_destination,
+            f"{DISPLAY_NAME}_{filename}", # content
+            "File", # title
+            desired_method=LXMF.LXMessage.DIRECT,
+            include_ticket=True
+        )
+        msg.fields[LXMF.FIELD_FILE_ATTACHMENTS] = [[filename, file_bytes]] 
+        
+        if msg:
+            router.handle_outbound(msg)
+        else:
+            raise Exception("Failed to build LXMF message")
+    except Exception as e:
+        print(f"Error: {e}")
+        pass

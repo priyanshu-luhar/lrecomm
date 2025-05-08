@@ -107,6 +107,12 @@ def get_unread_voicemails():
         c.execute("SELECT wavpath, time, senderHash FROM vm_recv WHERE unread = 1 ORDER BY time;")
         return c.fetchall()
 
+def get_recv_voicemails():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT wavpath, time, senderHash FROM vm_recv;")
+        return c.fetchall()
+
 def get_all_files(direction):
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
