@@ -115,6 +115,12 @@ def get_recv_voicemails():
         c.execute("SELECT wavpath, time, senderHash FROM vm_recv;")
         return c.fetchall()
 
+def get_sent_voicemails():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT wavpath, time, receiverHash FROM vm_sent;")
+        return c.fetchall()
+
 def get_all_files(direction):
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -126,3 +132,14 @@ def get_all_files(direction):
             return []
         return c.fetchall()
 
+def get_recv_files():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT filepath, time, senderHash FROM file_recv;")
+        return c.fetchall()
+
+def get_sent_files():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT filepath, time, receiverHash FROM file_sent;")
+        return c.fetchall()
