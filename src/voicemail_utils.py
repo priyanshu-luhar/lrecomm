@@ -6,6 +6,7 @@ from database_utils import *
 from datetime import datetime
 import subprocess
 import curses
+import RNS
 
 def record_voicemail(stdscr, identity_hash, save_folder="../str/voicemails/sent", rate=8000, chunk=1024, channels=1):
     format = pyaudio.paInt16
@@ -126,7 +127,7 @@ def convert_audio_to_bytes(input_wav, codec="codec2", bitrate=1200):
 
             subprocess.run([
                 "ffmpeg", "-y", "-i", input_wav,
-                "-f", "s16le", "-ar", "8000", "-ac", "1", raw_path
+                "-f", "s16le", "-ar", bitrate, "-ac", "1", raw_path
             ], check=True)
 
             subprocess.run([
@@ -155,7 +156,7 @@ def encode_audio_to_codec2(input_path, output_path, bitrate=1200):
         # Convert input file to 8kHz, mono, 16-bit PCM raw format
         subprocess.run([
             "ffmpeg", "-y", "-i", input_path,
-            "-f", "s16le", "-ar", "8000", "-ac", "1", raw_path
+            "-f", "s16le", "-ar", bitrate, "-ac", "1", raw_path
         ], check=True)
 
         # Encode raw audio to Codec2
@@ -178,7 +179,7 @@ def decode_codec2_to_wav(input_path, output_wav_path, bitrate=1200):
 
         # Convert raw to WAV for playback
         subprocess.run([
-            "ffmpeg", "-y", "-f", "s16le", "-ar", "8000", "-ac", "1",
+            "ffmpeg", "-y", "-f", "s16le", "-ar", bitrate, "-ac", "1",
             "-i", raw_path, output_wav_path
         ], check=True)
 
@@ -186,8 +187,9 @@ def decode_codec2_to_wav(input_path, output_wav_path, bitrate=1200):
     except Exception as e:
         return None
 
-def save_and_decode_audio(fields, output_dir="../str/voicemails/received", output_path=None):
-    def get_audio_duration_seconds(path):
+
+def get_audio_duration_seconds(path):
+
         try:
             result = subprocess.run(
                 [
@@ -204,6 +206,9 @@ def save_and_decode_audio(fields, output_dir="../str/voicemails/received", outpu
             return int(float(result.stdout.strip()))
         except Exception as e:
             return 0
+
+
+def save_and_decode_audio(fields, output_dir="../str/voicemails/received", output_path=None):
 
     try:
         if 7 not in fields:
@@ -225,7 +230,7 @@ def save_and_decode_audio(fields, output_dir="../str/voicemails/received", outpu
             output_wav_path = os.path.join(output_dir_final, f"{base_name}.wav")
 
 
-
+        # Opus
         if mode_code == 16:
             # Opus decoding
             opus_path = os.path.join(output_dir_final, f"{base_name}.opus")
@@ -253,7 +258,7 @@ def save_and_decode_audio(fields, output_dir="../str/voicemails/received", outpu
                 return None
 
         duration = get_audio_duration_seconds(output_wav_path)
-        return output_wav_path
+        return output_wav_path, duration
 
     except Exception as e:
-        return None
+        return None, 0

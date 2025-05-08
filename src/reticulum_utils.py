@@ -8,6 +8,7 @@ from LXMF import LXMessage as LXM
 from database_utils import *
 from voicemail_utils import *
 from globals import *
+import RNS
 
 def make_identity():
     my_id = RNS.Identity()
@@ -167,10 +168,10 @@ def send_msg(router, destination, source, content):
         desired_method=LXMF.LXMessage.DIRECT,
         include_ticket=True
     )
-
     router.handle_outbound(msg)
 
 def send_vm(wavpath, my_destination, dest_hash, router):
+    RNS.log(f"Sending voicemail to {dest_hash}", RNS.LOG_DEBUG)
     global DISPLAY_NAME
     try:
         destination = resolve_destination(dest_hash)
@@ -189,9 +190,10 @@ def send_vm(wavpath, my_destination, dest_hash, router):
         if msg:
             router.handle_outbound(msg)
         else:
+            RNS.log("Failed to build LXMF message", RNS.LOG_ERROR)
             raise Exception("Failed to build LXMF message")
     except Exception as e:
-        print(f"Error: {e}")
+        RNS.log(f"Error: {e}", RNS.LOG_ERROR)
         pass
 
 def send_file(filepath, my_destination, dest_hash, router):
