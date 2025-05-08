@@ -9,14 +9,6 @@ from database_utils import *
 from voicemail_utils import *
 from globals import *
 
-
-APP_NAME = "lrecomm"
-ANNOUNCE_INTERVAL = 60
-IDENTITY_PATH = "../dbs/my_identity"
-STORAGE_DIR = "../dbs/lxmf"
-STAMP_COST = 1
-DISPLAY_NAME = "luhar"
-
 def make_identity():
     my_id = RNS.Identity()
     my_id.to_file(IDENTITY_PATH)
@@ -49,7 +41,7 @@ def rns_setup(configpath=None):
 
     announce_handler = LCOMMAnnounceHandler(aspect_filter=None)
     RNS.Transport.register_announce_handler(announce_handler)
-    router.announce(my_destination.hash)
+    my_destination.announce(app_data=DISPLAY_NAME.encode("utf-8"))
     router.register_delivery_callback(msg_callback)
     
     update_contacts()
@@ -137,18 +129,18 @@ def msg_callback(message):
                 for attachment in attachments:
                     if len(attachment) == 2:
                         filename, file_bytes = attachment
-                        safe_name = f"{int(time.time())}_{filename}"
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        safe_name = f"{timestamp}_{filename}"
                         file_path = os.path.join(save_dir, safe_name)
 
                         with open(file_path, "wb") as f:
                             f.write(file_bytes)
 
                         log_file_recv(hex_hash, file_path)
-                        print(f"[✓] Received file saved: {file_path}")
                     else:
-                        print("[!] Malformed attachment field")
+                        pass
             else:
-                print("[!] No attachments found in fields")
+                pass
         except Exception as e:
             print(f"[!] Error saving received file: {e}")
     else:

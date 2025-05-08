@@ -122,7 +122,7 @@ def convert_audio_to_bytes(input_wav, codec="codec2", bitrate=1200):
     try:
         if codec == "codec2":
             raw_path = input_wav.replace(".wav", ".raw")
-            c2_path = input_wav.replace(".wav", f"_{bitrate}.bin")
+            c2_path = input_wav.replace(".wav", f"_{bitrate}.c2")
 
             subprocess.run([
                 "ffmpeg", "-y", "-i", input_wav,

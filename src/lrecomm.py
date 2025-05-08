@@ -87,7 +87,6 @@ def show_menu(stdscr):
         "files": "Files",
         "announce": "Announce",
         "broadcast": "Broadcast",
-        "web": "Web",
         "sip": "SIP",
         "mayday": "MAYDAY [Emergency Broadcast]",
         "q": "Quit"
@@ -122,7 +121,7 @@ def show_menu(stdscr):
             vm_menu = {}
             vm_menu["send"] = "Send a Voicemail"
             vm_menu["unread"] = "Voicemails Received: Unread"
-            vm_menu["recv"] = "Previous Voicemails Received"
+            vm_menu["recv"] = "Voicemails Received"
             vm_menu["sent"] = "Voicemails Sent"
             vm_menu["back"] = "Back to Main Menu"
 
@@ -138,11 +137,12 @@ def show_menu(stdscr):
                     
                     # records a voice message in wav format and returns filepath
                     vm_filepath = record_voicemail(stdscr, recipient["hash"])
-                    #vm_filepath = "../str/voicemails/received/demo.wav"
-                    send_vm(vm_filepath, my_destination, recipient["hash"], router)
-                    log_vm_send(recipient["hash"], vm_filepath)
                     
-                    # todo, gonna add a function call to send audio file to the recipient hash
+                    #vm_filepath = "../str/voicemails/received/demo.wav"
+                    
+                    send_vm(vm_filepath, my_destination, recipient["hash"], router)
+                    
+                    log_vm_send(recipient["hash"], vm_filepath)
                     
                     stdscr.clear()
                     stdscr.addstr(0, 0, f"To: {recipient['name']} [{recipient['hash']}]", curses.A_BOLD)
@@ -161,14 +161,21 @@ def show_menu(stdscr):
                 recv_vm_menu["back"] = "Back to Voicemail Menu"
                 recv_vm_selected = handle_menu(stdscr, "Received Voicemails", recv_vm_menu)
                 
-                if recv_vm_selected:
-                    play_demo_voicemail("../str/voicemails/received/demo.wav")
+                if recv_vm_selected in recv_vm_menu and recv_vm_selected != "back":
+                    vm = recv_vm[int(recv_vm_selected)]
+                    play_demo_voicemail(vm[0])
 
             elif vm_selected == "sent":
-                pass
+                sent_vm = get_sent_voicemails()
+                sent_vm_menu = {str(i): f"{c[0]} " for i, c in enumerate(sent_vm)}
+                sent_vm_menu["back"] = "Back to Voicemail Menu"
+                sent_vm_selected = handle_menu(stdscr, "Voicemails Sent", sent_vm_menu)
+                
+                if sent_vm_selected in sent_vm_menu and sent_vm_selected != "back":
+                    vm = sent_vm[int(sent_vm_selected)]
+                    play_demo_voicemail(vm[0])
             else:
                 pass
-                # Imma do nothin
         elif selected == "files":
             file_menu = {}
             file_menu["send"] = "Send a File"
@@ -189,7 +196,6 @@ def show_menu(stdscr):
                     file_filepath = get_manual_file_path(stdscr)
                     
                     send_file(file_filepath, my_destination, recipient["hash"], router)
-                    time.sleep(5)
                     
                     log_file_send(recipient["hash"], file_filepath)
                     
@@ -201,12 +207,25 @@ def show_menu(stdscr):
                     time.sleep(2)
 
             elif file_selected == "recv":
-                pass
+                recv_file = get_recv_files()
+                recv_file_menu = {str(i): f"{c[0]} " for i, c in enumerate(recv_file)}
+                recv_file_menu["back"] = "Back to File Menu"
+                recv_file_selected = handle_menu(stdscr, "Received Files", recv_file_menu)
+                
+                if recv_file_selected in recv_file_menu and recv_file_selected != "back":
+                    file = recv_file[int(recv_file_selected)]
+                    open_file_in_new_shell(file[0])
             elif file_selected == "sent":
-                pass
+                sent_file = get_sent_files()
+                sent_file_menu = {str(i): f"{c[0]} " for i, c in enumerate(sent_file)}
+                sent_file_menu["back"] = "Back to File Menu"
+                sent_file_selected = handle_menu(stdscr, "Files Sent", sent_file_menu)
+                
+                if sent_file_selected in sent_file_menu and sent_file_selected != "back":
+                    file = sent_file[int(sent_file_selected)]
+                    open_file_in_new_shell(file[0])
             else:
                 pass
-                # Imma do nothing
         elif selected == "sip":
             sip_menu = {}
             sip_menu["issip"] = "SIP gateway"
@@ -219,6 +238,13 @@ def show_menu(stdscr):
             else:
                 sip_title = "This is a CLIENT"
                 sip_selected = handle_menu(stdscr, sip_title, sip_menu)
+            
+            if sip_selected == "issip":
+                IS_SIP = True
+            elif sip_selected == "notsip":
+                IS_SIP = False
+            else:
+                pass
         elif selected == "announce":
             announce_myself(my_destination, router)
             stdscr.clear()
