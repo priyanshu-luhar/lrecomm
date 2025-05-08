@@ -307,7 +307,7 @@ class Telephone(SignallingReceiver):
         # self.transmit_codec = Raw()
 
     def select_call_frame_time(self):
-        self.target_frame_time_ms = 80
+        self.target_frame_time_ms = 40
         return self.target_frame_time_ms
 
     def __reset_dialling_pipelines(self):
@@ -343,7 +343,7 @@ class Telephone(SignallingReceiver):
         if self.ringtone_path != None and os.path.isfile(self.ringtone_path):
             if not self.ringer_pipeline:
                 if not self.ringer_output: self.ringer_output = LineSink(preferred_device=self.ringer_device)
-                self.ringer_source = OpusFileSource(self.ringtone_path, loop=True, target_frame_ms=80)
+                self.ringer_source = OpusFileSource(self.ringtone_path, loop=True, target_frame_ms=self.target_frame_time_ms)
                 self.ringer_pipeline = Pipeline(source=self.ringer_source, codec=Null(), sink=self.ringer_output)
 
             def job():
@@ -427,7 +427,6 @@ class Telephone(SignallingReceiver):
             if self.audio_input:       self.audio_input.start()
             if self.transmit_pipeline: self.transmit_pipeline.start()
             if self.receive_pipeline:  self.receive_pipeline.start()
-            if self.custom_receive_sink: self.custom_receive_sink.start()
             if not self.audio_input:   RNS.log("No audio input was ready at call establishment", RNS.LOG_ERROR)
             RNS.log(f"Audio pipelines started", RNS.LOG_DEBUG)
 
@@ -506,6 +505,7 @@ class Telephone(SignallingReceiver):
                     with self.caller_pipeline_open_lock:
                         self.__reset_dialling_pipelines()
                         self.__open_pipelines(self.active_call.get_remote_identity())
+                        if self.custom_receive_sink: self.custom_receive_sink.start()
                 elif signal == Signalling.STATUS_ESTABLISHED:
                     if self.active_call and self.active_call.is_outgoing:
                         RNS.log("Remote call setup completed, starting audio pipelines", RNS.LOG_DEBUG)
