@@ -95,7 +95,7 @@ def show_messages(stdscr, identity_hash, NAME):
         stdscr.addstr(height - input_win_height, len("Type your message: "), box[:width - 20])
         stdscr.refresh()
 
-        #time.sleep(0.1)
+        time.sleep(0.1)
 
     input_thread.join()
     return box.strip()
