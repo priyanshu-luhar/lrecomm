@@ -5,17 +5,28 @@ import LXMF
 import time
 import curses
 import threading
+import signal
 import subprocess
 
 from database_utils import *
 from voicemail_utils import *
 from reticulum_utils import *
+# from audio_call import *
 from message_utils import *
 from file_utils import *
 from globals import *
 
 from datetime import datetime as dt
 from LXMF import LXMessage as LXM
+from LXST.Sources import LineSource
+from LXST.Sinks import LineSink
+from voice import ReticulumTelephone
+from wav_sink import FileSink
+from audio_call import setup_audio_call
+
+RNS.logfile = "../logs/rns.log"
+RNS.loglevel = RNS.LOG_EXTREME
+RNS.logdest = RNS.LOG_FILE
 
 
 def draw_box(stdscr, title, options, descriptions, current_idx):
@@ -58,27 +69,50 @@ def get_user_input(stdscr, prompt):
     curses.noecho()
     return input_str
 
+
 def handle_menu(stdscr, title, descriptions):
+    global telephone
     options = list(descriptions.keys())
     current_idx = 0
 
-    while True:
-        draw_box(stdscr, title, options, descriptions, current_idx)
-        key = stdscr.getch()
+    stdscr.nodelay(True)  # Non-blocking mode
+    stdscr.clear()
 
-        if key == curses.KEY_UP:
-            current_idx = (current_idx - 1) % len(options)
-        elif key == curses.KEY_DOWN:
-            current_idx = (current_idx + 1) % len(options)
-        elif key in [curses.KEY_ENTER, 10, 13]:
-            return options[current_idx]
-        elif key == 27:
-            return "back"
+    base_title = title  # Keep the original title static
+    dynamic_title = f"{base_title} [{telephone.status_text}]"
+    draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
+    try:
+        while True:
+            dynamic_title = f"{base_title} [{telephone.status_text}]"
+
+            if refresh_needed.is_set():
+                draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
+                refresh_needed.clear()
+
+            key = stdscr.getch()
+            if key == -1:
+                time.sleep(0.1)
+                continue
+
+            if key == curses.KEY_UP:
+                current_idx = (current_idx - 1) % len(options)
+                draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
+            elif key == curses.KEY_DOWN:
+                current_idx = (current_idx + 1) % len(options)
+                draw_box(stdscr, dynamic_title, options, descriptions, current_idx)
+            elif key in [curses.KEY_ENTER, 10, 13]:
+                return options[current_idx]
+            elif key == 27:  # ESC
+                return "back"
+    finally:
+        stdscr.nodelay(False)
+
 
 def show_menu(stdscr):
-    global contacts, my_destination
+    global contacts, my_destination, router, reticulum, broadcast_destination, telephone
     curses.curs_set(0)
     stdscr.keypad(True)
+    # threading.Thread(target=background_refresh, args=(stdscr,), daemon=True).start()
 
     main_menu = {
         "messages": "Messages",
@@ -94,7 +128,8 @@ def show_menu(stdscr):
     }
 
     while True:
-        selected = handle_menu(stdscr, "LRECOMM", main_menu)
+        title = f"LRECOMM"
+        selected = handle_menu(stdscr, title, main_menu)
 
         if selected == "q":
             break
@@ -234,6 +269,55 @@ def show_menu(stdscr):
                     pass
                 else:
                     broadcast_msg(broadcast_destination, user_input)
+        elif selected == "audio":
+            audio_menu = {}
+            # if telephone.is_in_call:
+            if not telephone.is_available:
+                audio_menu["hangup"] = "Hang Up"
+            else:
+                audio_menu["call"] = "Place an Audio Call"
+            audio_menu["back"] = "Back to Main Menu"
+
+            audio_selected = handle_menu(stdscr, "Audio Call", audio_menu)
+
+            if audio_selected == "call":
+                call_menu = {str(i): f"{c['name']}" for i, c in enumerate(contacts)}
+                call_menu["back"] = "Back to Audio Menu"
+
+                selected_contact = handle_menu(stdscr, "Call Contact", call_menu)
+                if selected_contact != "back":
+                    recipient = contacts[int(selected_contact)]
+
+                    RNS.log(f"Calling {recipient['name']} with delivery_hash {recipient['delivery_hash']}", RNS.LOG_DEBUG)
+                    try:
+                        peer_bytes = bytes.fromhex(recipient["delivery_hash"])
+                        peer_identity = RNS.Identity.recall(peer_bytes)
+                        if not peer_identity:
+                            RNS.Transport.request_path(peer_bytes)
+                            time.sleep(1)
+                            peer_identity = RNS.Identity.recall(peer_bytes)
+
+                        if peer_identity:
+                            telephone.call(peer_identity)
+                            stdscr.clear()
+                            stdscr.addstr(0, 0, f"Dialing {recipient['name']}...", curses.A_BOLD)
+                            stdscr.refresh()
+                            time.sleep(3)
+                        else:
+                            stdscr.addstr(0, 0, f"Could not resolve identity", curses.A_BOLD)
+                            stdscr.refresh()
+                            time.sleep(2)
+                    except Exception as e:
+                        stdscr.addstr(0, 0, f"Call failed: {e}", curses.A_BOLD)
+                        stdscr.refresh()
+                        time.sleep(2)
+            elif audio_selected == "hangup":
+                telephone.hangup()
+                stdscr.clear()
+                stdscr.addstr(0, 0, "Call ended", curses.A_BOLD)
+                stdscr.refresh()
+                time.sleep(2)
+
         else:
             stdscr.clear()
             msg = f"You selected: {main_menu[selected]}"
@@ -241,21 +325,67 @@ def show_menu(stdscr):
             stdscr.refresh()
             time.sleep(2)
 
+# def background_refresh(interval=0.5):
+#     # pass
+#     while True:
+#         time.sleep(interval)
+#         refresh_needed.set()
+
 def run_menu():
     curses.wrapper(show_menu)
     
 def shutdown():
-    print("[CLEANUP] Shutting down RNS...")
+    # print("[CLEANUP] Hanging up and shutting down RNS...")
+    RNS.log("Hanging up and shutting down RNS...", RNS.LOG_DEBUG)
+    global telephone
+    try:
+        if telephone.is_in_call:
+            RNS.log("Hanging up call...", RNS.LOG_DEBUG)
+            telephone.hangup()
+        telephone.stop()     # Tears down threads, releases devices
+    except Exception as e:
+        RNS.log(f"[ERROR] During telephone shutdown: {e}", RNS.LOG_ERROR)
+        # print(f"[ERROR] During telephone shutdown: {e}")
+
     RNS.Transport.detach_interfaces()
     RNS.Transport.identity = None
     RNS.reticulum = None
 
-if __name__ == "__main__":
-     my_destination, router, reticulum, broadcast_destination = rns_setup("../.reticulum")
 
-     try:
+# sigint handler
+def signal_handler(signum, frame):
+    # print(f"[INFO] Received signal {signum}, shutting down...")
+    RNS.log(f"Received {signum} signal shutting down...", RNS.LOG_ERROR)
+    shutdown()
+    sys.exit(0)
+# Register the signal handler
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+def main():
+    global my_destination, router, reticulum, broadcast_destination, telephone
+    my_destination, router, reticulum, broadcast_destination = rns_setup("../.reticulum")
+    id = load_identity()
+    # telephone = setup_audio_call()
+    speaker = LineSink()
+    microphone = LineSource()
+    output_directory = "../audio_out"
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    recording_path = os.path.join(output_directory, "voicemail.wav") 
+
+    file_sink = FileSink(recording_path, samplerate=8000)
+    # telephone = ReticulumTelephone(id, microphone=microphone, auto_answer=0.5, receive_sink=file_sink)
+    telephone = ReticulumTelephone(id, speaker=speaker, microphone=microphone, auto_answer=0.5)
+    telephone.announce()
+
+    try:
         run_menu()
-     except Exception as e:
+    except Exception as e:
         print(f'We encountered an error: {e}')
-     finally:
+    finally:
         shutdown()
+if __name__ == "__main__":
+    main()
+

@@ -1,19 +1,21 @@
+from wav_sink import FileSink
+from LXST.Sinks import LineSink
+from LXST.Sources import LineSource
 import os
-import RNS
-import LXMF
-import LXST
-import time
-import keyboard
+from voice import ReticulumTelephone
+from globals import *
 
-# got to work on this
-def live_call(destination):
-    hung_up = False
-    while not hung_up:
-    
-def dial_call(destination):
-    hung_up = False
-    while not hung_up:
 
-def answer_call():
-    hung_up = False
-    while not hung_up:
+def setup_audio_call():
+    global telephone
+    speaker = LineSink()
+    microphone = LineSource()
+    output_directory = "../audio_out"
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    recording_path = os.path.join(output_directory, "voicemail.wav") 
+
+    file_sink = FileSink(recording_path)
+    telephone = ReticulumTelephone(id, speaker=speaker, microphone=microphone, auto_answer=0.5, receive_sink=file_sink)
+    telephone.announce()
+    return telephone

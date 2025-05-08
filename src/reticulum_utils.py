@@ -69,9 +69,15 @@ class LCOMMAnnounceHandler():
         global contacts
         hex_hash = destination_hash.hex().lower()
         exs = False
-        name = app_data.decode("utf-8")
         try:
-            add_identity(hex_hash, hex_hash, name, name)
+            name = app_data.decode("utf-8")
+        except Exception as e:
+            RNS.log(f"[WARN] Failed to decode announce name: {e}")
+            name = "Unknown"
+
+        try:
+            identity_hash = announced_identity.hash.hex().lower()
+            add_identity(identity_hash, hex_hash, name, name)
         except:
             exs = True
 
@@ -105,13 +111,16 @@ def bpacket_callback(data, packet):
 def update_contacts():
     global contacts
     db_entries = get_all_id()
-    existing_hashes = {c['hash'] for c in contacts}
+    existing_hashes = {c.get("identity_hash") for c in contacts}
 
-    for rns_hash, name in db_entries:
+    for row in db_entries:
+        rns_hash = row["rnsHash"]
         if rns_hash not in existing_hashes:
             contacts.append({
-                "hash": rns_hash,
-                "name": name
+                "name": row["name"],
+                "identity_hash": row["rnsHash"],
+                "delivery_hash": row["lxmfHash"],
+                "hash": row["lxmfHash"]
             })
 
 # Receiving
